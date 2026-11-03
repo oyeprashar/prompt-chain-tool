@@ -1,5 +1,7 @@
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { RunForm } from "./run-form";
+import { RunOutputActions } from "./run-output-actions";
 import { notFound } from "next/navigation";
 import { ArrowDown, ArrowLeft, ArrowUp, Layers3, Trash2 } from "lucide-react";
 import { requireSuperadmin } from "@/lib/auth";
@@ -7,8 +9,10 @@ import { createClient } from "@/lib/supabase/server";
 import { addStep, deleteChain, deleteStep, moveStep, updateChain, updateStep } from "../../actions";
 
 type Chain = { id: string; name: string; description: string };
-type Step = { id: string; chain_id: string; title: string; prompt: string; position: number };
-type Run = { id: string; status: string; input_text: string; input_image_name: string | null; step_results: { step_id: string; title: string; output: string }[] | null; final_output: string | null; error_message: string | null; created_at: string };
+type Step = { id: string; chain_id: string; title: string; prompt: string; position: number; output_type: "text" | "image" };
+type Run = { id: string; status: string; input_text: string; input_image_name: string | null; input_image_path: string | null; step_results: { step_id: string; title: string; output: string; output_type?: string; image_path?: string }[] | null; final_output: string | null; error_message: string | null; created_at: string };
+
+export const dynamic = "force-dynamic";
 
 const inputClass = "mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm";
 const buttonClass = "rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800";
@@ -29,12 +33,25 @@ export default async function ChainDetail({
   if (chainError || !chain) notFound();
 
   const { data: steps, error: stepsError } = await supabase.from("prompt_chain_steps")
-    .select("id, chain_id, title, prompt, position").eq("chain_id", id)
+    .select("id, chain_id, title, prompt, position, output_type").eq("chain_id", id)
     .order("position", { ascending: true }).order("id", { ascending: true });
   const orderedSteps = (steps ?? []) as Step[];
   const { data: runs, error: runsError } = await supabase.from("prompt_chain_runs")
-    .select("id, status, input_text, input_image_name, step_results, final_output, error_message, created_at")
+    .select("id, status, input_text, input_image_name, input_image_path, step_results, final_output, error_message, created_at")
     .eq("chain_id", id).order("created_at", { ascending: false }).limit(20);
+
+  // Signed URLs expire; create them on each server render for authorized admins.
+  const allRuns = (runs ?? []) as Run[];
+  const mediaPaths = [...new Set(allRuns.flatMap(run => [
+    ...(run.input_image_path ? [run.input_image_path] : []),
+    ...(run.step_results ?? []).flatMap(result => result.image_path ? [result.image_path] : []),
+  ]))];
+  const signedEntries = await Promise.all(mediaPaths.map(async path => {
+    const { data } = await supabase.storage.from("prompt-chain-media")
+      .createSignedUrl(path, 60 * 60);
+    return [path, data?.signedUrl ?? ""] as const;
+  }));
+  const signedUrls = Object.fromEntries(signedEntries);
 
   return (
     <main className="mx-auto min-h-screen max-w-4xl px-6 py-10">
@@ -89,6 +106,12 @@ export default async function ChainDetail({
                 <input type="hidden" name="chain_id" value={id} />
                 <label className="text-sm">Title<input className={inputClass} name="title" defaultValue={step.title} maxLength={120} required /></label>
                 <label className="text-sm">Prompt<textarea className={inputClass} name="prompt" defaultValue={step.prompt} maxLength={10000} rows={4} required /></label>
+                <label className="text-sm">Output type
+                  <select className={inputClass} name="output_type" defaultValue={step.output_type ?? "text"}>
+                    <option value="text">Text / captions</option>
+                    <option value="image">Generated image</option>
+                  </select>
+                </label>
                 <button type="submit" className="w-fit rounded-lg bg-indigo-600 px-4 py-2 text-sm hover:bg-indigo-500">Save step</button>
               </form>
               <form action={deleteStep} className="mt-4">
@@ -107,6 +130,12 @@ export default async function ChainDetail({
           <div className="mt-4 grid gap-3">
             <label className="text-sm">Title<input className={inputClass} name="title" placeholder="Summarize the input" maxLength={120} required /></label>
             <label className="text-sm">Prompt<textarea className={inputClass} name="prompt" placeholder="Describe the image in one sentence..." maxLength={10000} rows={4} required /></label>
+            <label className="text-sm">Output type
+              <select className={inputClass} name="output_type" defaultValue="text">
+                <option value="text">Text / captions</option>
+                <option value="image">Generated image</option>
+              </select>
+            </label>
           </div>
           <button type="submit" className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm hover:bg-indigo-500">Add step</button>
         </form>
@@ -118,7 +147,8 @@ export default async function ChainDetail({
         </section>
 
         <section className="mt-12">
-          <h2 className="text-xl font-semibold">Recent runs</h2>
+          <h2 className="text-xl font-semibold">Generated media and recent runs</h2>
+          <p className="mt-2 text-sm text-slate-400">Only runs from this prompt chain appear here. Images are private and use time-limited URLs.</p>
           {runsError ? <p role="alert" className="mt-3 text-sm text-amber-300">Could not load run history. Apply the runs SQL migration first.</p> : null}
           <div className="mt-4 grid gap-4">
             {(runs as Run[] | null)?.map(run => (
@@ -128,13 +158,24 @@ export default async function ChainDetail({
                   <span className={run.status === "completed" ? "text-sm text-emerald-300" : run.status === "failed" ? "text-sm text-rose-300" : "text-sm text-amber-300"}>{run.status}</span>
                 </div>
                 {run.input_text ? <p className="mt-3 whitespace-pre-wrap text-sm text-slate-400">Input: {run.input_text}</p> : null}
-                {run.input_image_name ? <p className="mt-2 text-xs text-slate-400">Image: {run.input_image_name}</p> : null}
+                {run.input_image_name ? <p className="mt-2 text-xs text-slate-400">Input image: {run.input_image_name}</p> : null}
+                {run.input_image_path && signedUrls[run.input_image_path] ?
+                  <a href={signedUrls[run.input_image_path]} target="_blank" rel="noopener noreferrer">
+                    <img src={signedUrls[run.input_image_path]} alt={run.input_image_name ?? "Uploaded input"} className="mt-3 max-h-60 rounded-lg border border-slate-700 object-contain" />
+                  </a> : null}
                 {run.step_results?.map((result, index) => (
                   <div key={result.step_id + index} className="mt-4 border-t border-slate-800 pt-4">
                     <h3 className="text-sm font-semibold text-indigo-300">Step {index + 1}: {result.title}</h3>
-                    <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-200">{result.output}</p>
+                    {result.output ? <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-200">{result.output}</p> : null}
+                    {result.image_path && signedUrls[result.image_path] ?
+                      <a href={signedUrls[result.image_path]} target="_blank" rel="noopener noreferrer" title="View generated image">
+                        <img src={signedUrls[result.image_path]} alt={`Generated media from step ${index + 1}`} className="mt-3 max-h-80 rounded-lg border border-slate-700 object-contain" />
+                      </a> : null}
                   </div>
                 ))}
+                {run.status === "completed" && run.step_results?.length ?
+                  <RunOutputActions chainName={chain.name} runId={run.id} results={run.step_results} />
+                  : null}
                 {run.error_message ? <p className="mt-4 text-sm text-rose-300">Error: {run.error_message}</p> : null}
               </article>
             ))}
