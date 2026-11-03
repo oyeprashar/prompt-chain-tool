@@ -82,6 +82,7 @@ export async function addStep(formData: FormData) {
   const path = `/dashboard/chains/${chainId}`;
   const title = field(formData, "title", 120);
   const prompt = field(formData, "prompt", 10000);
+  const outputType = field(formData, "output_type", 10) === "image" ? "image" : "text";
   if (!title || !prompt) redirect(errorUrl(path, "Step title and prompt are required"));
 
   const supabase = await createClient();
@@ -112,6 +113,7 @@ export async function addStep(formData: FormData) {
       name: title,
       prompt,
       prompt_template: prompt,
+      output_type: outputType,
       position,
       step_number: position,
     });
@@ -140,7 +142,7 @@ export async function updateStep(formData: FormData) {
 
   const supabase = await createClient();
   const { error } = await supabase.from("prompt_chain_steps")
-    .update({ title, name: title, prompt, prompt_template: prompt }).eq("id", id).eq("chain_id", chainId);
+    .update({ title, name: title, prompt, prompt_template: prompt, output_type: outputType }).eq("id", id).eq("chain_id", chainId);
   if (error) redirect(errorUrl(path, "Could not update step"));
   revalidatePath(path);
   redirect(path);
