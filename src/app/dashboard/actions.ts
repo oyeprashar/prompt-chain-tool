@@ -138,6 +138,7 @@ export async function updateStep(formData: FormData) {
   const path = `/dashboard/chains/${chainId}`;
   const title = field(formData, "title", 120);
   const prompt = field(formData, "prompt", 10000);
+  const outputType = field(formData, "output_type", 10) === "image" ? "image" : "text";
   if (!title || !prompt) redirect(errorUrl(path, "Step title and prompt are required"));
 
   const supabase = await createClient();
