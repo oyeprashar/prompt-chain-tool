@@ -15,8 +15,9 @@ export function ThemeSwitcher() {
     document.documentElement.dataset.theme = initial;
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const update = () => {
+      const selected = document.documentElement.dataset.theme;
       document.documentElement.dataset.resolvedTheme =
-        initial === "system" ? (media.matches ? "dark" : "light") : initial;
+        selected === "system" ? (media.matches ? "dark" : "light") : selected;
     };
     update();
     media.addEventListener("change", update);
