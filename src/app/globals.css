@@ -2,6 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: light; }
+/* Default is dark. Light/system override existing Tailwind colors without
+   changing any of the original pages or their layout. */
+:root { color-scheme: dark; }
 html { min-height: 100%; }
 body { margin: 0; min-height: 100vh; }
+
+html[data-resolved-theme="light"] { color-scheme: light; }
+html[data-resolved-theme="light"] body { background-color: #f8fafc !important; color: #0f172a !important; }
+html[data-resolved-theme="light"] .bg-slate-950 { background-color: #f8fafc !important; }
+html[data-resolved-theme="light"] .bg-slate-900,
+html[data-resolved-theme="light"] .bg-slate-900\/60 { background-color: #fff !important; }
+html[data-resolved-theme="light"] .text-slate-100,
+html[data-resolved-theme="light"] .text-slate-200,
+html[data-resolved-theme="light"] .text-slate-300 { color: #0f172a !important; }
+html[data-resolved-theme="light"] .text-slate-400 { color: #475569 !important; }
+html[data-resolved-theme="light"] .text-indigo-300,
+html[data-resolved-theme="light"] .text-indigo-200 { color: #4338ca !important; }
+html[data-resolved-theme="light"] .text-emerald-300 { color: #047857 !important; }
+html[data-resolved-theme="light"] .text-rose-300 { color: #be123c !important; }
+html[data-resolved-theme="light"] .text-amber-300 { color: #b45309 !important; }
+html[data-resolved-theme="light"] .border-slate-800,
+html[data-resolved-theme="light"] .border-slate-700 { border-color: #cbd5e1 !important; }
+html[data-resolved-theme="light"] .hover\:bg-slate-800:hover { background-color: #e2e8f0 !important; }
+html[data-resolved-theme="light"] textarea,
+html[data-resolved-theme="light"] input,
+html[data-resolved-theme="light"] select { color: #0f172a; background-color: #fff; }
+html[data-resolved-theme="light"] .bg-indigo-600,
+html[data-resolved-theme="light"] .bg-indigo-600 * { color: #fff !important; }
+html[data-resolved-theme="light"] .bg-rose-950\/40 { background-color: #fff1f2 !important; }
+html[data-resolved-theme="light"] .bg-amber-950\/40 { background-color: #fffbeb !important; }
