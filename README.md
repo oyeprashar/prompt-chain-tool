@@ -11,6 +11,19 @@ COMS 6998E Week 8 project — superadmin-only Next.js application for creating a
 
 Never commit `.env.local` or a Supabase service-role key.
 
+## Fixing chain creation permissions
+
+If the dashboard can list chains but creating a chain fails, run
+[the permissions repair migration](supabase/migrations/20261103_repair_chain_permissions.sql)
+in **Supabase → SQL Editor**, after the original prompt-chain migration.
+The repair enables RLS and grants authenticated users table privileges,
+while the policies continue to restrict reads and writes to superadmins.
+
+In local development, the create form also displays the Supabase error code
+and message, while the terminal logs the full database error. In production,
+the error is intentionally generic. If the repair does not help, the database
+may have an older table schema with extra required columns.
+
 ## Google OAuth
 
 In Supabase Authentication, enable Google OAuth and configure its Google Cloud credentials. For local development, configure Supabase's Site URL as `http://localhost:3000` and allow `http://localhost:3000/auth/callback` as a redirect URL. Add your Vercel URL with `/auth/callback` later.

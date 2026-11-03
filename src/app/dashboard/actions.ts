@@ -29,7 +29,19 @@ export async function createChain(formData: FormData) {
     .insert({ name, description, created_by: user.id })
     .select("id").single();
 
-  if (error || !data) redirect(errorUrl("/dashboard", "Could not create chain. Check database setup."));
+  if (error || !data) {
+    // Keep full database diagnostics on the server; never show internal details in production.
+    console.error("createChain failed:", {
+      code: error?.code,
+      message: error?.message,
+      details: error?.details,
+      hint: error?.hint,
+    });
+    const errorMessage = process.env.NODE_ENV === "development" && error
+      ? `Create failed [${error.code ?? "unknown"}]: ${error.message}`
+      : "Could not create chain. Check database permissions.";
+    redirect(errorUrl("/dashboard", errorMessage));
+  }
   revalidatePath("/dashboard");
   redirect(`/dashboard/chains/${data.id}`);
 }
