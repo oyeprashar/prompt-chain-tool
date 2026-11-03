@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RunForm } from "./run-form";
 import { notFound } from "next/navigation";
 import { ArrowDown, ArrowLeft, ArrowUp, Layers3, Trash2 } from "lucide-react";
 import { requireSuperadmin } from "@/lib/auth";
@@ -7,6 +8,7 @@ import { addStep, deleteChain, deleteStep, moveStep, updateChain, updateStep } f
 
 type Chain = { id: string; name: string; description: string };
 type Step = { id: string; chain_id: string; title: string; prompt: string; position: number };
+type Run = { id: string; status: string; input_text: string; input_image_name: string | null; step_results: { step_id: string; title: string; output: string }[] | null; final_output: string | null; error_message: string | null; created_at: string };
 
 const inputClass = "mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm";
 const buttonClass = "rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800";
@@ -30,6 +32,9 @@ export default async function ChainDetail({
     .select("id, chain_id, title, prompt, position").eq("chain_id", id)
     .order("position", { ascending: true }).order("id", { ascending: true });
   const orderedSteps = (steps ?? []) as Step[];
+  const { data: runs, error: runsError } = await supabase.from("prompt_chain_runs")
+    .select("id, status, input_text, input_image_name, step_results, final_output, error_message, created_at")
+    .eq("chain_id", id).order("created_at", { ascending: false }).limit(20);
 
   return (
     <main className="mx-auto min-h-screen max-w-4xl px-6 py-10">
@@ -105,6 +110,37 @@ export default async function ChainDetail({
           </div>
           <button type="submit" className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm hover:bg-indigo-500">Add step</button>
         </form>
+
+        <section className="mt-12 rounded-xl border border-indigo-500/30 bg-slate-900/60 p-6">
+          <h2 className="text-xl font-semibold">Run this chain</h2>
+          <p className="mt-2 text-sm text-slate-400">Gemini processes each prompt in order. The previous step&apos;s response becomes the next step&apos;s input.</p>
+          <RunForm chainId={id} disabled={orderedSteps.length === 0} />
+        </section>
+
+        <section className="mt-12">
+          <h2 className="text-xl font-semibold">Recent runs</h2>
+          {runsError ? <p role="alert" className="mt-3 text-sm text-amber-300">Could not load run history. Apply the runs SQL migration first.</p> : null}
+          <div className="mt-4 grid gap-4">
+            {(runs as Run[] | null)?.map(run => (
+              <article key={run.id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-medium">{new Date(run.created_at).toLocaleString()}</span>
+                  <span className={run.status === "completed" ? "text-sm text-emerald-300" : run.status === "failed" ? "text-sm text-rose-300" : "text-sm text-amber-300"}>{run.status}</span>
+                </div>
+                {run.input_text ? <p className="mt-3 whitespace-pre-wrap text-sm text-slate-400">Input: {run.input_text}</p> : null}
+                {run.input_image_name ? <p className="mt-2 text-xs text-slate-400">Image: {run.input_image_name}</p> : null}
+                {run.step_results?.map((result, index) => (
+                  <div key={result.step_id + index} className="mt-4 border-t border-slate-800 pt-4">
+                    <h3 className="text-sm font-semibold text-indigo-300">Step {index + 1}: {result.title}</h3>
+                    <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-200">{result.output}</p>
+                  </div>
+                ))}
+                {run.error_message ? <p className="mt-4 text-sm text-rose-300">Error: {run.error_message}</p> : null}
+              </article>
+            ))}
+            {!runsError && !runs?.length ? <p className="rounded-xl border border-dashed border-slate-700 p-6 text-center text-sm text-slate-400">No runs yet. Execute this chain above.</p> : null}
+          </div>
+        </section>
       </section>
     </main>
   );

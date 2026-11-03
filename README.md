@@ -26,10 +26,20 @@ Signed-in users must be able to read their own `profiles.is_superadmin` value. T
 - Create, update, delete, and reorder prompt steps
 - Protected Postgres tables with RLS and atomic per-chain step swap
 
+## Execute a prompt chain
+
+1. Run the [run-history SQL migration](supabase/migrations/20261103_prompt_chain_runs.sql) in the **same** Supabase project. The earlier prompt-chain migration must already have been applied.
+2. Add `GEMINI_API_KEY` in your local `.env.local` (server-side only). Rotate any key that was shared in chat or exposed elsewhere.
+3. Run `npm run dev`, open a chain with at least one step, enter a starting text prompt or upload a JPG/PNG/WebP image (up to 3 MB), and click **Run chain**.
+4. The model receives the image only in the first step; each following step receives the previous text output. Run outputs, including intermediate steps and failures, are saved in `prompt_chain_runs`.
+5. Optionally use `GEMINI_MODEL` to override the default `gemini-2.5-flash`.
+
+Note: The first version generates **text/captions from text or image input**. It does not generate new image files or persist the uploaded image. That remains a later enhancement if image generation is required.
+
 ## Still to build
 
-- Sequential Gemini execution and prompt-to-prompt output passing
-- Output/media persistence and history
+- Image generation/output file persistence (currently text generation with optional image input)
+- Generated text output history is implemented; richer media gallery remains
 - Light/dark/system theme selector
 - Vercel deployment and authentication testing
 
