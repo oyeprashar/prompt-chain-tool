@@ -85,14 +85,45 @@ export async function addStep(formData: FormData) {
   if (!title || !prompt) redirect(errorUrl(path, "Step title and prompt are required"));
 
   const supabase = await createClient();
-  const { data: lastStep, error: positionError } = await supabase.from("prompt_chain_steps")
-    .select("position").eq("chain_id", chainId).order("position", { ascending: false }).limit(1);
-  if (positionError) redirect(errorUrl(path, "Could not load steps"));
+  // This project reuses the table from the earlier app. Its original
+  // prompt_chain_id, step_number, name and prompt_template columns are NOT NULL.
+  // Keep both sets of columns synchronized instead of weakening constraints.
+  const { data: existingSteps, error: positionError } = await supabase
+    .from("prompt_chain_steps")
+    .select("position, step_number")
+    .eq("prompt_chain_id", chainId);
+  if (positionError) {
+    console.error("addStep position lookup:", positionError);
+    redirect(errorUrl(path, "Could not load steps"));
+  }
 
-  const position = (lastStep?.[0]?.position ?? -1) + 1;
+  // Legacy steps are numbered from 1; retain that numbering for new rows.
+  const position = Math.max(
+    0,
+    ...(existingSteps ?? []).map(step =>
+      Math.max(step.position ?? 0, step.step_number ?? 0),
+    ),
+  ) + 1;
   const { error } = await supabase.from("prompt_chain_steps")
-    .insert({ chain_id: chainId, title, prompt, position });
-  if (error) redirect(errorUrl(path, "Could not add step"));
+    .insert({
+      chain_id: chainId,
+      prompt_chain_id: chainId,
+      title,
+      name: title,
+      prompt,
+      prompt_template: prompt,
+      position,
+      step_number: position,
+    });
+  if (error) {
+    console.error("addStep insert:", {
+      code: error.code, message: error.message, details: error.details, hint: error.hint,
+    });
+    const message = process.env.NODE_ENV === "development"
+      ? `Could not add step [${error.code}]: ${error.message}`
+      : "Could not add step";
+    redirect(errorUrl(path, message));
+  }
   revalidatePath(path);
   redirect(path);
 }
@@ -109,7 +140,7 @@ export async function updateStep(formData: FormData) {
 
   const supabase = await createClient();
   const { error } = await supabase.from("prompt_chain_steps")
-    .update({ title, prompt }).eq("id", id).eq("chain_id", chainId);
+    .update({ title, name: title, prompt, prompt_template: prompt }).eq("id", id).eq("chain_id", chainId);
   if (error) redirect(errorUrl(path, "Could not update step"));
   revalidatePath(path);
   redirect(path);
