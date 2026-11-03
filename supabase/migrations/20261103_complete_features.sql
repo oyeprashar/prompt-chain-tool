@@ -66,12 +66,24 @@ begin
     order by position asc, id asc limit 1;
   end if;
   if not found then return; end if;
+  -- Move through a temporary position so immediate UNIQUE constraints on
+  -- (prompt_chain_id, step_number) or (chain_id, position) do not fail.
   update public.prompt_chain_steps
-  set position = case when id = current_step.id then neighbor.position
-                      else current_step.position end,
-      step_number = case when id = current_step.id then neighbor.step_number
-                         else current_step.step_number end
-  where id in (current_step.id, neighbor.id);
+  set position = (select coalesce(max(position), 0) + 1
+                  from public.prompt_chain_steps where chain_id = current_step.chain_id),
+      step_number = (select coalesce(max(step_number), 0) + 1
+                     from public.prompt_chain_steps where chain_id = current_step.chain_id)
+  where id = current_step.id;
+
+  update public.prompt_chain_steps
+  set position = current_step.position,
+      step_number = current_step.step_number
+  where id = neighbor.id;
+
+  update public.prompt_chain_steps
+  set position = neighbor.position,
+      step_number = neighbor.step_number
+  where id = current_step.id;
 end;
 $$;
 
