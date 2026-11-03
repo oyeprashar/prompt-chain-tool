@@ -1,12 +1,19 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { generateText } from "@/lib/gemini";
+import { generateMedia } from "@/lib/gemini";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-type Step = { id: string; title: string; prompt: string; position: number };
-type StepResult = { step_id: string; title: string; output: string };
+const BUCKET = "prompt-chain-media";
+type Step = { id: string; title: string; prompt: string; position: number; output_type: "text" | "image" };
+type StepResult = {
+  step_id: string;
+  title: string;
+  output: string;
+  output_type: "text" | "image";
+  image_path?: string;
+};
 
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -34,19 +41,16 @@ export async function POST(
   if (chainError || !chain) return NextResponse.json({ error: "Chain not found" }, { status: 404 });
 
   const { data: stepsData, error: stepsError } = await supabase.from("prompt_chain_steps")
-    .select("id, title, prompt, position").eq("chain_id", id)
+    .select("id, title, prompt, position, output_type").eq("chain_id", id)
     .order("position", { ascending: true }).order("id", { ascending: true });
-  if (stepsError) return NextResponse.json({ error: "Could not load steps" }, { status: 500 });
+  if (stepsError) return NextResponse.json({ error: "Could not load steps. Apply the complete-features migration." }, { status: 500 });
   const steps = (stepsData ?? []) as Step[];
   if (!steps.length) return NextResponse.json({ error: "Add a step before running the chain" }, { status: 400 });
   if (steps.length > 10) return NextResponse.json({ error: "Runs are limited to 10 steps" }, { status: 400 });
 
   let form: FormData;
-  try {
-    form = await request.formData();
-  } catch {
-    return NextResponse.json({ error: "Invalid form submission" }, { status: 400 });
-  }
+  try { form = await request.formData(); }
+  catch { return NextResponse.json({ error: "Invalid form submission" }, { status: 400 }); }
 
   const rawInput = form.get("input");
   const input = typeof rawInput === "string" ? rawInput.trim() : "";
@@ -64,28 +68,61 @@ export async function POST(
       chain_id: id, started_by: user.id, input_text: input,
       input_image_name: imageFile?.name ?? null, status: "running",
     }).select("id").single();
-  if (runError || !run) {
-    return NextResponse.json({ error: "Could not save run. Apply the runs migration first." }, { status: 500 });
-  }
+  if (runError || !run) return NextResponse.json({ error: "Could not create execution record" }, { status: 500 });
 
   const results: StepResult[] = [];
   try {
-    const image = imageFile ? {
+    let latestImage = imageFile ? {
       mimeType: imageFile.type,
       base64: Buffer.from(await imageFile.arrayBuffer()).toString("base64"),
     } : undefined;
+
+    // Save the original image privately so admins can inspect this run later.
+    if (latestImage) {
+      const extension = latestImage.mimeType === "image/png" ? "png"
+        : latestImage.mimeType === "image/webp" ? "webp" : "jpg";
+      const path = `${id}/${run.id}/input.${extension}`;
+      const { error } = await supabase.storage.from(BUCKET)
+        .upload(path, Buffer.from(latestImage.base64, "base64"), {
+          contentType: latestImage.mimeType, upsert: false,
+        });
+      if (error) throw new Error("Could not store input image. Apply the media storage migration.");
+      const { error: saveError } = await supabase.from("prompt_chain_runs")
+        .update({ input_image_path: path }).eq("id", run.id);
+      if (saveError) throw new Error("Could not save input image reference");
+    }
 
     let previousOutput = input;
     for (const [index, step] of steps.entries()) {
       const prompt = [
         step.prompt,
-        index === 0 ? "Initial input:" : "Output from the previous step:",
-        previousOutput || (index === 0 && image ? "See the attached image." : ""),
+        index === 0 ? "Initial input:" : "Output from previous step:",
+        previousOutput || (latestImage ? "See the attached image." : ""),
       ].join("\n\n");
-      // Only the first step receives the uploaded image; subsequent steps use text output.
-      const output = await generateText(prompt, index === 0 ? image : undefined);
-      results.push({ step_id: step.id, title: step.title, output });
-      previousOutput = output;
+
+      // Carry generated images forward to subsequent steps as well.
+      const generated = await generateMedia(prompt, step.output_type ?? "text", latestImage);
+      const result: StepResult = {
+        step_id: step.id, title: step.title,
+        output: generated.text, output_type: step.output_type ?? "text",
+      };
+
+      if (generated.image) {
+        const extension = generated.image.mimeType === "image/jpeg" ? "jpg"
+          : generated.image.mimeType === "image/webp" ? "webp" : "png";
+        const path = `${id}/${run.id}/step-${index + 1}.${extension}`;
+        const { error } = await supabase.storage.from(BUCKET)
+          .upload(path, Buffer.from(generated.image.base64, "base64"), {
+            contentType: generated.image.mimeType, upsert: false,
+          });
+        if (error) throw new Error("Could not store generated image");
+        result.image_path = path;
+        latestImage = generated.image;
+      }
+      results.push(result);
+      previousOutput = generated.text || (result.image_path
+        ? "Use the generated image from the previous step."
+        : previousOutput);
 
       const { error: progressError } = await supabase.from("prompt_chain_runs")
         .update({ step_results: results }).eq("id", run.id);
@@ -101,6 +138,7 @@ export async function POST(
     return NextResponse.json({ runId: run.id });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Execution failed";
+    console.error("Prompt chain execution failed:", message);
     await supabase.from("prompt_chain_runs").update({
       status: "failed", step_results: results,
       error_message: message.slice(0, 300), finished_at: new Date().toISOString(),
