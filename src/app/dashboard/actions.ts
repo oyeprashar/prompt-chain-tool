@@ -69,8 +69,26 @@ export async function deleteChain(formData: FormData) {
   const id = field(formData, "id", 36);
   if (!validId(id)) redirect("/dashboard");
   const supabase = await createClient();
+  // Preserve media paths before the database cascade deletes run history.
+  const { data: runs } = await supabase.from("prompt_chain_runs")
+    .select("input_image_path, step_results").eq("chain_id", id);
+  const mediaPaths = (runs ?? []).flatMap(run => {
+    const results = Array.isArray(run.step_results) ? run.step_results : [];
+    return [
+      ...(typeof run.input_image_path === "string" ? [run.input_image_path] : []),
+      ...results.flatMap((result: { image_path?: unknown }) =>
+        typeof result?.image_path === "string" ? [result.image_path] : []),
+    ];
+  });
+
   const { error } = await supabase.from("prompt_chains").delete().eq("id", id);
   if (error) redirect(errorUrl(`/dashboard/chains/${id}`, "Could not delete chain"));
+
+  if (mediaPaths.length) {
+    const { error: storageError } = await supabase.storage
+      .from("prompt-chain-media").remove([...new Set(mediaPaths)]);
+    if (storageError) console.error("Could not clean up chain media:", storageError.message);
+  }
   revalidatePath("/dashboard");
   redirect("/dashboard");
 }
