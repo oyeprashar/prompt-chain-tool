@@ -68,7 +68,18 @@ export async function POST(
       chain_id: id, started_by: user.id, input_text: input,
       input_image_name: imageFile?.name ?? null, status: "running",
     }).select("id").single();
-  if (runError || !run) return NextResponse.json({ error: "Could not create execution record" }, { status: 500 });
+  if (runError || !run) {
+    console.error("Could not create execution record", {
+      code: runError?.code,
+      message: runError?.message,
+      hint: runError?.hint,
+    });
+    return NextResponse.json({
+      error: process.env.NODE_ENV === "development" && runError
+        ? `Could not create execution record [${runError.code}]: ${runError.message}`
+        : "Could not create execution record",
+    }, { status: 500 });
+  }
 
   const results: StepResult[] = [];
   try {
