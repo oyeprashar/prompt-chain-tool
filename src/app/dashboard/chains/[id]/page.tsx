@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { RunForm } from "./run-form";
 import { RunOutputActions } from "./run-output-actions";
+import { ConfirmSubmit } from "@/components/confirm-submit";
 import { notFound } from "next/navigation";
 import { ArrowDown, ArrowLeft, ArrowUp, Layers3, Trash2 } from "lucide-react";
 import { requireSuperadmin } from "@/lib/auth";
@@ -74,7 +75,7 @@ export default async function ChainDetail({
           </form>
           <form action={deleteChain} className="mt-5 border-t border-slate-800 pt-4">
             <input type="hidden" name="id" value={id} />
-            <button type="submit" className="flex items-center gap-2 text-sm text-rose-300 hover:text-rose-200"><Trash2 size={15} /> Delete chain and all its steps</button>
+            <ConfirmSubmit message="Delete this chain, all of its steps, and its run history? This cannot be undone." className="flex items-center gap-2 text-sm text-rose-300 hover:text-rose-200"><Trash2 size={15} /> Delete chain and all its steps</ConfirmSubmit>
           </form>
         </div>
 
@@ -117,7 +118,7 @@ export default async function ChainDetail({
               <form action={deleteStep} className="mt-4">
                 <input type="hidden" name="id" value={step.id} />
                 <input type="hidden" name="chain_id" value={id} />
-                <button type="submit" className="flex items-center gap-2 text-sm text-rose-300"><Trash2 size={14} /> Delete step</button>
+                <ConfirmSubmit message="Delete this prompt step? This cannot be undone." className="flex items-center gap-2 text-sm text-rose-300"><Trash2 size={14} /> Delete step</ConfirmSubmit>
               </form>
             </article>
           ))}
