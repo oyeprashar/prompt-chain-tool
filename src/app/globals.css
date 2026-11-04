@@ -4,13 +4,50 @@
 
 /* Default is dark. Light/system override existing Tailwind colors without
    changing any of the original pages or their layout. */
-:root { color-scheme: dark; }
+:root {
+  color-scheme: dark;
+  --page: #070a12;
+  --panel: rgba(15, 23, 42, 0.72);
+  --grid: rgba(148, 163, 184, 0.055);
+}
 html { min-height: 100%; }
-body { margin: 0; min-height: 100vh; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--page);
+  background-image:
+    radial-gradient(circle at 15% -10%, rgba(99, 102, 241, 0.18), transparent 34rem),
+    radial-gradient(circle at 92% 12%, rgba(14, 165, 233, 0.11), transparent 28rem),
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: auto, auto, 32px 32px, 32px 32px;
+  background-attachment: fixed;
+}
+
+button, a, input, textarea, select { transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, opacity 160ms ease, transform 160ms ease; }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid #818cf8;
+  outline-offset: 2px;
+}
+input::placeholder, textarea::placeholder { color: #64748b; }
+
+.app-panel {
+  border: 1px solid rgba(51, 65, 85, 0.8);
+  background: var(--panel);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(16px);
+}
 
 html[data-resolved-theme="light"] { color-scheme: light; }
+html[data-resolved-theme="light"] {
+  --page: #f7f8fc;
+  --panel: rgba(255, 255, 255, 0.82);
+  --grid: rgba(15, 23, 42, 0.045);
+}
 html[data-resolved-theme="light"] body { background-color: #f8fafc !important; color: #0f172a !important; }
-html[data-resolved-theme="light"] .bg-slate-950 { background-color: #f8fafc !important; }
+html[data-resolved-theme="light"] .bg-slate-950,
+html[data-resolved-theme="light"] .bg-slate-950\/60,
+html[data-resolved-theme="light"] .bg-slate-950\/40 { background-color: rgba(248, 250, 252, 0.92) !important; }
 html[data-resolved-theme="light"] .bg-slate-900,
 html[data-resolved-theme="light"] .bg-slate-900\/60 { background-color: #fff !important; }
 html[data-resolved-theme="light"] .text-slate-100,

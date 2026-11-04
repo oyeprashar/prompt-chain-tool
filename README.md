@@ -39,7 +39,7 @@ Never commit `.env.local` or a service-role key. Rotate credentials if they have
 
 This assignment reuses an existing database. That database already has `prompt_chains`, `prompt_chain_steps`, and `profiles` with **legacy columns**. Do not drop or recreate those tables.
 
-1. Verify Google OAuth and that your own `profiles.is_superadmin` is true, with an authenticated SELECT policy for your profile row.
+1. Verify Google OAuth and that your own `profiles.is_superadmin` is true. The app checks this through the least-privilege `is_prompt_chain_admin()` database helper, so it does not need a broad client-readable policy on `profiles`.
 2. Keep the legacy compatibility columns on `prompt_chain_steps`: `prompt_chain_id`, `step_number`, `name`, `prompt_template`. The Next.js actions write these alongside `chain_id`, `position`, `title`, `prompt`.
 3. Verify `prompt_chain_runs` exists. If missing, apply [the runs migration](supabase/migrations/20261103_prompt_chain_runs.sql) **after** the `is_prompt_chain_admin()` function is created.
 4. **Apply [20261103_complete_features.sql](supabase/migrations/20261103_complete_features.sql) in Supabase SQL Editor.** It adds missing compatibility columns, `output_type`, saved input image paths, the private `prompt-chain-media` Storage bucket and policies, and updates the step-reorder function so legacy `step_number` and new `position` remain synchronized.

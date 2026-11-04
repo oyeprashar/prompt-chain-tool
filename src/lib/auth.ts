@@ -10,14 +10,12 @@ export async function requireSuperadmin() {
     redirect("/");
   }
 
-  // Always check the database, never trust client-provided profile flags.
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("is_superadmin")
-    .eq("id", user.id)
-    .single();
+  // The SECURITY DEFINER helper reads the current user's profile without
+  // requiring a broad client-readable policy on the profiles table.
+  const { data: isSuperadmin, error: profileError } = await supabase
+    .rpc("is_prompt_chain_admin");
 
-  if (profileError || profile?.is_superadmin !== true) {
+  if (profileError || isSuperadmin !== true) {
     redirect("/access-denied");
   }
 

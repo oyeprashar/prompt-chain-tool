@@ -30,9 +30,9 @@ export async function POST(
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
 
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles").select("is_superadmin").eq("id", user.id).single();
-  if (profileError || profile?.is_superadmin !== true) {
+  const { data: isSuperadmin, error: profileError } = await supabase
+    .rpc("is_prompt_chain_admin");
+  if (profileError || isSuperadmin !== true) {
     return NextResponse.json({ error: "Superadmin access required" }, { status: 403 });
   }
 

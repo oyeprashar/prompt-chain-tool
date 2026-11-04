@@ -10,7 +10,7 @@ export default function AccessDenied() {
         <h1 className="mt-5 text-2xl font-semibold">Superadmin access required</h1>
         <p className="mt-3 text-sm leading-6 text-slate-400">
           Your account is signed in, but it is not authorized to use this tool.
-          Ask an administrator to verify the profile's superadmin flag.
+          Ask an administrator to verify the profile&apos;s superadmin flag.
         </p>
         <div className="mt-6 flex justify-center gap-3">
           <Link href="/" className="rounded-lg border border-slate-700 px-4 py-2 text-sm">Home</Link>
