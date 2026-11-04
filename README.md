@@ -42,7 +42,7 @@ This assignment reuses an existing database. That database already has `prompt_c
 1. Verify Google OAuth and that your own `profiles.is_superadmin` is true, with an authenticated SELECT policy for your profile row.
 2. Keep the legacy compatibility columns on `prompt_chain_steps`: `prompt_chain_id`, `step_number`, `name`, `prompt_template`. The Next.js actions write these alongside `chain_id`, `position`, `title`, `prompt`.
 3. Verify `prompt_chain_runs` exists. If missing, apply [the runs migration](supabase/migrations/20261103_prompt_chain_runs.sql) **after** the `is_prompt_chain_admin()` function is created.
-4. **Apply [20261103_complete_features.sql](supabase/migrations/20261103_complete_features.sql) in Supabase SQL Editor.** It adds the `output_type` column, saved input image path, private `prompt-chain-media` Storage bucket, superadmin-only Storage policies, and updates the step-reorder function to keep legacy `step_number` and new `position` synchronized.
+4. **Apply [20261103_complete_features.sql](supabase/migrations/20261103_complete_features.sql) in Supabase SQL Editor.** It adds missing compatibility columns, `output_type`, saved input image paths, the private `prompt-chain-media` Storage bucket and policies, and updates the step-reorder function so legacy `step_number` and new `position` remain synchronized.
 5. Refresh the page after running the SQL.
 
 Do not run the original `CREATE TABLE IF NOT EXISTS` migration expecting it to add missing columns to an existing table: it will not. Check your schema before applying any migrations to this shared project.
@@ -89,3 +89,7 @@ There is also a GitHub Actions workflow that runs these checks on pushes and pul
 ## Access control
 
 All chain/step server actions check the logged-in user's database superadmin flag. The execution endpoint does the same. RLS controls access to chain records and run history. Private Storage uses superadmin-only object policies and short-lived signed image URLs.
+
+## Acceptance testing
+
+Use [TESTING.md](TESTING.md) for the complete manual acceptance checklist. The checklist covers superadmin access, chain/step CRUD, reordering, text and image execution, output history, themes, and Vercel submission. GitHub Actions runs typecheck, lint, and build; check the latest workflow result rather than assuming a successful deployment.
