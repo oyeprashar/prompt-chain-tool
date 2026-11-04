@@ -1,5 +1,28 @@
 -- Final-feature migration for the reused COMS6998 Supabase project.
 -- Safe for existing rows; does not rename/drop legacy columns.
+-- This application shares the older tables with previous coursework.
+-- Adding aliases is safe; retaining the old NOT NULL columns keeps old apps working.
+alter table public.prompt_chains
+  add column if not exists created_by uuid references auth.users(id),
+  add column if not exists updated_at timestamptz default now();
+
+alter table public.prompt_chain_steps
+  add column if not exists chain_id uuid references public.prompt_chains(id) on delete cascade,
+  add column if not exists position integer,
+  add column if not exists title text,
+  add column if not exists prompt text;
+
+-- Existing step rows must remain visible to the new application.
+update public.prompt_chain_steps
+set chain_id = coalesce(chain_id, prompt_chain_id),
+    position = coalesce(position, step_number),
+    title = coalesce(title, name),
+    prompt = coalesce(prompt, prompt_template)
+where chain_id is null or position is null or title is null or prompt is null;
+
+create index if not exists prompt_chain_steps_chain_position_idx
+  on public.prompt_chain_steps(chain_id, position);
+
 alter table public.prompt_chain_steps
   add column if not exists output_type text not null default 'text';
 alter table public.prompt_chain_steps
