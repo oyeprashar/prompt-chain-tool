@@ -72,19 +72,19 @@ export async function POST(
 
   const results: StepResult[] = [];
   try {
-    let latestImage = imageFile ? {
+    let previousImage = imageFile ? {
       mimeType: imageFile.type,
       base64: Buffer.from(await imageFile.arrayBuffer()).toString("base64"),
     } : undefined;
 
     // Save the original image privately so admins can inspect this run later.
-    if (latestImage) {
-      const extension = latestImage.mimeType === "image/png" ? "png"
-        : latestImage.mimeType === "image/webp" ? "webp" : "jpg";
+    if (previousImage) {
+      const extension = previousImage.mimeType === "image/png" ? "png"
+        : previousImage.mimeType === "image/webp" ? "webp" : "jpg";
       const path = `${id}/${run.id}/input.${extension}`;
       const { error } = await supabase.storage.from(BUCKET)
-        .upload(path, Buffer.from(latestImage.base64, "base64"), {
-          contentType: latestImage.mimeType, upsert: false,
+        .upload(path, Buffer.from(previousImage.base64, "base64"), {
+          contentType: previousImage.mimeType, upsert: false,
         });
       if (error) throw new Error("Could not store input image. Apply the media storage migration.");
       const { error: saveError } = await supabase.from("prompt_chain_runs")
@@ -97,11 +97,11 @@ export async function POST(
       const prompt = [
         step.prompt,
         index === 0 ? "Initial input:" : "Output from previous step:",
-        previousOutput || (latestImage ? "See the attached image." : ""),
+        previousOutput || (previousImage ? "See the attached image." : ""),
       ].join("\n\n");
 
       // Carry generated images forward to subsequent steps as well.
-      const generated = await generateMedia(prompt, step.output_type ?? "text", latestImage);
+      const generated = await generateMedia(prompt, step.output_type ?? "text", previousImage);
       const result: StepResult = {
         step_id: step.id, title: step.title,
         output: generated.text, output_type: step.output_type ?? "text",
@@ -117,9 +117,10 @@ export async function POST(
           });
         if (error) throw new Error("Could not store generated image");
         result.image_path = path;
-        latestImage = generated.image;
       }
       results.push(result);
+      // Only pass media from the immediately previous step.
+      previousImage = generated.image;
       previousOutput = generated.text || (result.image_path
         ? "Use the generated image from the previous step."
         : previousOutput);
