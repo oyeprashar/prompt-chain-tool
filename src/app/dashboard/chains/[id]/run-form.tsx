@@ -7,17 +7,20 @@ export function RunForm({ chainId, disabled }: { chainId: string; disabled: bool
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   async function run(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (loading) return;
     setError("");
+    setSuccess("");
     setLoading(true);
     const form = new FormData(event.currentTarget);
     try {
       const response = await fetch(`/api/chains/${chainId}/run`, { method: "POST", body: form });
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error ?? "Could not run chain");
+      setSuccess("Run completed. See the newest results under Generated media and recent runs.");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unexpected error occurred");
@@ -33,9 +36,10 @@ export function RunForm({ chainId, disabled }: { chainId: string; disabled: bool
       </label>
       <label className="text-sm">Image input (optional, first step only)
         <input name="image" type="file" accept="image/jpeg,image/png,image/webp" className="mt-2 block w-full text-sm text-slate-300" />
-        <span className="mt-1 block text-xs text-slate-400">JPG, PNG or WebP, up to 3 MB. Uploaded directly to Gemini; only its file name is saved.</span>
+        <span className="mt-1 block text-xs text-slate-400">JPG, PNG or WebP, up to 3 MB. The image is sent to Gemini and saved to private Supabase Storage.</span>
       </label>
       {error ? <p role="alert" className="text-sm text-rose-300">{error}</p> : null}
+      {success ? <p role="status" className="text-sm text-emerald-300">{success}</p> : null}
       <button disabled={disabled || loading} type="submit" className="w-fit rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
         {loading ? "Running chain..." : "Run chain"}
       </button>
